@@ -1,6 +1,7 @@
 package com.wharvex.gedcom;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,7 +11,11 @@ import java.util.Queue;
 public class GedcomLexer {
 
     public Queue<GedcomToken> tokenize(Path path) throws IOException {
-        return tokenize(Files.readString(path, StandardCharsets.UTF_8));
+        return tokenize(path, StandardCharsets.UTF_8);
+    }
+
+    public Queue<GedcomToken> tokenize(Path path, Charset charset) throws IOException {
+        return tokenize(Files.readString(path, charset));
     }
 
     public Queue<GedcomToken> tokenize(String input) {

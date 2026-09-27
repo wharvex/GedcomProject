@@ -11,6 +11,7 @@ import java.util.Queue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GedcomLexerParserTest {
@@ -74,5 +75,15 @@ class GedcomLexerParserTest {
         assertTrue(document.getRootNodes().size() > 2);
         assertEquals("HEAD", document.getRootNodes().get(0).getTag());
         assertEquals("TRLR", document.getRootNodes().get(document.getRootNodes().size() - 1).getTag());
+    }
+
+    @Test
+    void parserRejectsInvalidLevelJump() {
+        GedcomLexer lexer = new GedcomLexer();
+        GedcomParser parser = new GedcomParser();
+
+        Queue<GedcomToken> queue = lexer.tokenize("0 HEAD\n2 VERS 5.5.1\n");
+
+        assertThrows(IllegalArgumentException.class, () -> parser.parse(queue));
     }
 }

@@ -49,7 +49,14 @@ public class GedcomParser {
 
         GedcomNode node = new GedcomNode(level, xrefId, tagToken.getText(), value);
 
-        while (check(GedcomTokenType.LEVEL) && nextLevel() > level) {
+        while (check(GedcomTokenType.LEVEL)) {
+            int nextLevel = nextLevel();
+            if (nextLevel <= level) {
+                break;
+            }
+            if (nextLevel != level + 1) {
+                throw error(peek(), "Invalid level jump");
+            }
             node.addChild(parseNode());
         }
 
