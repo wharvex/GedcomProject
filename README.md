@@ -17,3 +17,5 @@ The parser should then look in that queue of tokens and create different kinds o
 The parser should use "recursive descent".
 
 The lexer and parser should target version 5.5.1 of the GEDCOM spec.
+
+See "fam-tree-example.ged" in the repo root for an example of a file that the lexer and parser should be able to accept and process as input.
