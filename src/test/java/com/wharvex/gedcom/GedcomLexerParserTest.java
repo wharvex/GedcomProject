@@ -3,8 +3,10 @@ package com.wharvex.gedcom;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 
@@ -85,5 +87,21 @@ class GedcomLexerParserTest {
         Queue<GedcomToken> queue = lexer.tokenize("0 HEAD\n2 VERS 5.5.1\n");
 
         assertThrows(IllegalArgumentException.class, () -> parser.parse(queue));
+    }
+
+    @Test
+    void readerParsesWithExplicitCharsetOverload() throws IOException {
+        GedcomReader reader = new GedcomReader();
+
+        GedcomDocument document = reader.read(Path.of("fam-tree-example.ged"), StandardCharsets.UTF_8);
+
+        assertNotNull(document);
+        assertEquals("HEAD", document.getRootNodes().get(0).getTag());
+    }
+
+    @Test
+    void parserRejectsEmptyQueue() {
+        GedcomParser parser = new GedcomParser();
+        assertThrows(IllegalArgumentException.class, () -> parser.parse(new ArrayDeque<>()));
     }
 }

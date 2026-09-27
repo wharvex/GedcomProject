@@ -11,7 +11,9 @@ import java.util.Queue;
 public class GedcomLexer {
 
     public Queue<GedcomToken> tokenize(Path path) throws IOException {
-        return tokenize(path, StandardCharsets.UTF_8);
+        byte[] bytes = Files.readAllBytes(path);
+        Charset detectedCharset = detectCharset(bytes);
+        return tokenize(new String(bytes, detectedCharset));
     }
 
     public Queue<GedcomToken> tokenize(Path path, Charset charset) throws IOException {
@@ -110,5 +112,29 @@ public class GedcomLexer {
 
     private boolean isXref(String text) {
         return text.length() >= 3 && text.charAt(0) == '@' && text.charAt(text.length() - 1) == '@';
+    }
+
+    private Charset detectCharset(byte[] bytes) {
+        String probe = new String(bytes, StandardCharsets.ISO_8859_1);
+        String[] lines = probe.split("\\R", 200);
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("1 CHAR ")) {
+                String declared = trimmed.substring("1 CHAR ".length()).trim().toUpperCase();
+                if (declared.startsWith("UTF-8") || declared.startsWith("UTF8")) {
+                    return StandardCharsets.UTF_8;
+                }
+                if (declared.startsWith("ASCII")) {
+                    return StandardCharsets.US_ASCII;
+                }
+                if (declared.startsWith("ANSEL") || declared.startsWith("ANSI")) {
+                    return StandardCharsets.ISO_8859_1;
+                }
+                if (declared.startsWith("UNICODE")) {
+                    return StandardCharsets.UTF_8;
+                }
+            }
+        }
+        return StandardCharsets.UTF_8;
     }
 }

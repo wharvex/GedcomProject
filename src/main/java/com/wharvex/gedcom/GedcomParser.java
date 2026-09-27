@@ -9,7 +9,15 @@ public class GedcomParser {
     private int cursor;
 
     public GedcomDocument parse(Queue<GedcomToken> tokenQueue) {
+        if (tokenQueue == null || tokenQueue.isEmpty()) {
+            throw new IllegalArgumentException("Token queue is empty");
+        }
+
         this.tokens = new ArrayList<>(tokenQueue);
+        if (tokens.get(tokens.size() - 1).getType() != GedcomTokenType.EOF) {
+            int line = tokens.get(tokens.size() - 1).getLine();
+            tokens.add(new GedcomToken(GedcomTokenType.EOF, "", line));
+        }
         this.cursor = 0;
 
         List<GedcomNode> roots = new ArrayList<>();
