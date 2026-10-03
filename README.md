@@ -14,3 +14,11 @@ gradle test
 GedcomReader reader = new GedcomReader();
 GedcomDocument document = reader.read(Path.of("fam-tree-example.ged"));
 ```
+
+## GUI viewer
+
+```bash
+gradle -q run --args="fam-tree-example.ged"
+```
+
+Or run `com.wharvex.gedcom.GedcomViewer` and use the Open button.
