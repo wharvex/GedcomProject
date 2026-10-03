@@ -61,10 +61,33 @@ public class GedcomViewer extends JFrame {
     }
 
     public static void main(String[] args) {
+        String mode = "raw";
+        String file = null;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--view") && i + 1 < args.length) {
+                mode = args[++i];
+            } else if (args[i].startsWith("--view=")) {
+                mode = args[i].substring("--view=".length());
+            } else {
+                file = args[i];
+            }
+        }
+        final String m = mode;
+        final String f = file;
+        if (!m.equals("raw") && !m.equals("tree")) {
+            System.err.println("Unknown view '" + m + "'; use --view raw or --view tree");
+            System.exit(1);
+        }
         SwingUtilities.invokeLater(() -> {
-            GedcomViewer v = new GedcomViewer();
-            v.setVisible(true);
-            if (args.length > 0) v.load(Path.of(args[0]));
+            if (m.equals("tree")) {
+                FamilyTreeViewer v = new FamilyTreeViewer();
+                v.setVisible(true);
+                if (f != null) v.load(Path.of(f));
+            } else {
+                GedcomViewer v = new GedcomViewer();
+                v.setVisible(true);
+                if (f != null) v.load(Path.of(f));
+            }
         });
     }
 }

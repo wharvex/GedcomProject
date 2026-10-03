@@ -22,3 +22,12 @@ gradle -q run --args="fam-tree-example.ged"
 ```
 
 Or run `com.wharvex.gedcom.GedcomViewer` and use the Open button.
+
+### Family tree view
+
+Pass `--view tree` to draw the file as a family tree chart instead of the raw
+record tree (`--view raw`, the default):
+
+```bash
+gradle -q run --args="--view tree fam-tree-example.ged"
+```
