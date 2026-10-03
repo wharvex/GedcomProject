@@ -32,6 +32,15 @@ record tree (`--view raw`, the default):
 gradle -q run --args="--view tree fam-tree-example.ged"
 ```
 
+### Roots (console)
+
+Pass `--view roots` to print the name and birth/death dates of every root
+(see below) to the terminal without opening a window:
+
+```bash
+gradle -q run --args="--view roots fam-tree-example.ged"
+```
+
 ## Roots explanation
 
 **Roots are people who are not children in any family and who are not married into the tree.**
