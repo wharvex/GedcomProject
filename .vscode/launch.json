@@ -6,24 +6,26 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Current File",
+            "name": "GEDCOM Viewer - Open File",
             "request": "launch",
-            "mainClass": "${file}"
+            "mainClass": "com.wharvex.gedcom.GedcomViewer",
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "java",
-            "name": "BudgetForecastCli",
+            "name": "GEDCOM Viewer - Raw Record Tree",
             "request": "launch",
-            "mainClass": "com.wharvex.budget.BudgetForecastCli",
-            "projectName": "Budget"
+            "mainClass": "com.wharvex.gedcom.GedcomViewer",
+            "cwd": "${workspaceFolder}",
+            "args": "fam-tree-example.ged"
         },
         {
             "type": "java",
-            "name": "BudgetForecastCli - Pending Transactions CSV",
+            "name": "GEDCOM Viewer - Family Tree",
             "request": "launch",
-            "mainClass": "com.wharvex.budget.BudgetForecastCli",
-            "projectName": "Budget",
-            "args": "--pending-transactions-csv \"C:\\Users\\Admin\\Downloads\\export-data-cc.csv\" --days 50"
+            "mainClass": "com.wharvex.gedcom.GedcomViewer",
+            "cwd": "${workspaceFolder}",
+            "args": "--view tree fam-tree-example.ged"
         }
     ]
 }
