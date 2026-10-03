@@ -32,7 +32,7 @@ record tree (`--view raw`, the default):
 gradle -q run --args="--view tree fam-tree-example.ged"
 ```
 
-### Roots explanation
+## Roots explanation
 
 **Roots are people who are not children in any family and who are not married into the tree.**
 
