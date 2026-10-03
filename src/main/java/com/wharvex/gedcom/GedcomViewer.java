@@ -74,9 +74,25 @@ public class GedcomViewer extends JFrame {
         }
         final String m = mode;
         final String f = file;
-        if (!m.equals("raw") && !m.equals("tree")) {
-            System.err.println("Unknown view '" + m + "'; use --view raw or --view tree");
+        if (!m.equals("raw") && !m.equals("tree") && !m.equals("roots")) {
+            System.err.println("Unknown view '" + m + "'; use --view raw, --view tree or --view roots");
             System.exit(1);
+        }
+        if (m.equals("roots")) {
+            if (f == null) {
+                System.err.println("--view roots requires a GEDCOM file");
+                System.exit(1);
+            }
+            try {
+                GedcomDocument doc = new GedcomReader().read(Path.of(f));
+                for (FamilyTreeModel.Person p : new FamilyTreeModel(doc).getRoots()) {
+                    System.out.println(p.name + (p.life.isEmpty() ? "" : " (" + p.life + ")"));
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to read " + f + ": " + e.getMessage());
+                System.exit(1);
+            }
+            return;
         }
         SwingUtilities.invokeLater(() -> {
             if (m.equals("tree")) {
