@@ -1,6 +1,6 @@
 # GEDCOM Project
 
-This project provides a lexer and recursive-descent parser for GEDCOM 5.5.1 files.
+This project provides a lexer, parser, and viewer for GEDCOM 5.5.1 files.
 
 ## Build and test
 
