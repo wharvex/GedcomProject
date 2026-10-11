@@ -42,12 +42,14 @@ public class FamilyTreeModel {
             List<Person> kids = new ArrayList<>();
             for (GedcomNode c : fam.getChildren()) {
                 Person p = people.get(c.getValue());
-                if (p == null) continue;
+                if (p == null)
+                    continue;
                 switch (c.getTag()) {
-                    case "HUSB" -> husb = p;
-                    case "WIFE" -> wife = p;
-                    case "CHIL" -> kids.add(p);
-                    default -> { }
+                case "HUSB" -> husb = p;
+                case "WIFE" -> wife = p;
+                case "CHIL" -> kids.add(p);
+                default -> {
+                }
                 }
             }
             if (husb != null && wife != null) {
@@ -63,16 +65,26 @@ public class FamilyTreeModel {
             }
         }
         for (Person p : people.values()) {
-            if (isChild.containsKey(p.id)) continue;
+            if (isChild.containsKey(p.id))
+                continue;
             // skip spouses who marry into the tree; they are shown alongside their partner
             boolean marriedIn = false;
             for (Person s : p.spouses) {
-                if (s.children.contains(p) || (!s.children.isEmpty() && p.children.isEmpty())
-                        || (s.id.compareTo(p.id) < 0 && !isChild.containsKey(s.id) && p.children.isEmpty())) {
+                final boolean pIsChildOfS = s.children.contains(p);
+                final boolean sHasChildren = !s.children.isEmpty();
+                final boolean pHasNoChildren = p.children.isEmpty();
+                final boolean tieBreaker = s.id.compareTo(p.id) < 0;
+                final boolean sIsNotAChild = !isChild.containsKey(s.id);
+                // The third or'ed condition uses xref-ID ordering to exclude a childless, non-child candidate when
+                // their non-child spouse has an earlier xref ID. Because the prior condition already excludes the
+                // candidate if that spouse has children, the ID comparison only makes a difference when the spouse has
+                // no children too.
+                if (pIsChildOfS || (sHasChildren && pHasNoChildren) || (tieBreaker && sIsNotAChild && pHasNoChildren)) {
                     marriedIn = true;
                 }
             }
-            if (!marriedIn) roots.add(p);
+            if (!marriedIn)
+                roots.add(p);
         }
     }
 
@@ -92,7 +104,8 @@ public class FamilyTreeModel {
     private static String lifeOf(GedcomNode indi) {
         String b = year(indi, "BIRT");
         String d = year(indi, "DEAT");
-        if (b.isEmpty() && d.isEmpty()) return "";
+        if (b.isEmpty() && d.isEmpty())
+            return "";
         return b + " - " + d;
     }
 
@@ -100,7 +113,8 @@ public class FamilyTreeModel {
         for (GedcomNode c : indi.getChildren()) {
             if (tag.equals(c.getTag())) {
                 for (GedcomNode g : c.getChildren()) {
-                    if ("DATE".equals(g.getTag()) && g.getValue() != null) return g.getValue();
+                    if ("DATE".equals(g.getTag()) && g.getValue() != null)
+                        return g.getValue();
                 }
             }
         }
