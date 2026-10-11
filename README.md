@@ -5,7 +5,13 @@ This project provides a lexer, parser, viewer, and roots printer for GEDCOM 5.5.
 ## Build and Test
 
 ```bash
-gradle test
+./gradlew test
+```
+
+On Windows PowerShell, use the Windows wrapper launcher instead:
+
+```powershell
+.\gradlew.bat test
 ```
 
 ## Lexer and Parser
@@ -22,13 +28,13 @@ GedcomDocument document = reader.read(Path.of("fam-tree-example.ged"));
 ### Usage Example (Raw)
 
 ```bash
-gradle -q run --args="fam-tree-example.ged"
+./gradlew -q run --args="fam-tree-example.ged"
 ```
 
 ### Usage Example (Tree)
 
 ```bash
-gradle -q run --args="--view tree fam-tree-example.ged"
+./gradlew -q run --args="--view tree fam-tree-example.ged"
 ```
 
 ## Roots Printer
@@ -36,7 +42,14 @@ gradle -q run --args="--view tree fam-tree-example.ged"
 ### Usage Example
 
 ```bash
-gradle -q run --args="--view roots fam-tree-example.ged"
+./gradlew -q run --args="--view roots fam-tree-example.ged"
+```
+
+In Windows PowerShell, replace `./gradlew` in these commands with
+`.\gradlew.bat`. For example, to open the tree viewer:
+
+```powershell
+.\gradlew.bat -q run --args="--view tree fam-tree-example.ged"
 ```
 
 ### Context
