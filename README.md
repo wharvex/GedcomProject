@@ -51,6 +51,7 @@ A person becomes a **root** (starting point for the tree layout) if:
 
 2. **They are NOT married into the tree** — this is the trickier part. A person is marked as "married in" if any of their spouses meet one of these conditions:
    - The spouse already has children (meaning they're an established parent in the tree)
+     - Note: "Already" means already identified earlier in the root-detection pass, not "earlier in history/time" in the family.
    - The spouse has children and the person doesn't (asymmetric: the spouse is rooted, this person married them)
    - Both are non-children AND the spouse's xref ID sorts earlier alphabetically AND the person has no children (tie-breaker: prefer the alphabetically-first spouse as the root)
 
