@@ -4,20 +4,59 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.IntConsumer;
 
 /** Graphical viewer that draws the GEDCOM file as a descendant family tree chart. */
 public class FamilyTreeViewer extends JFrame {
     private final ChartPanel chart = new ChartPanel();
+    private final JTextField searchField = new JTextField(20);
+    private final JLabel searchStatus = new JLabel(" ");
 
     public FamilyTreeViewer() {
         super("GEDCOM Family Tree");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         JButton open = new JButton("Open...");
         open.addActionListener(e -> chooseFile());
-        add(open, BorderLayout.NORTH);
+        JButton previous = new JButton("Previous");
+        previous.addActionListener(e -> chart.moveMatch(-1));
+        JButton next = new JButton("Next");
+        next.addActionListener(e -> chart.moveMatch(1));
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.add(open);
+        toolbar.add(new JLabel("Search:"));
+        toolbar.add(searchField);
+        toolbar.add(previous);
+        toolbar.add(next);
+        toolbar.add(searchStatus);
+        add(toolbar, BorderLayout.NORTH);
         add(new JScrollPane(chart), BorderLayout.CENTER);
+        searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void changed() {
+                chart.setSearchQuery(searchField.getText());
+            }
+
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                changed();
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                changed();
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                changed();
+            }
+        });
+        chart.setMatchCountListener(count -> searchStatus.setText(
+                count == 0 ? (searchField.getText().isEmpty() ? " " : "No matches")
+                        : (chart.getActiveMatchIndex() + 1) + " of " + count));
         setPreferredSize(new Dimension(1000, 700));
         pack();
         setLocationRelativeTo(null);
@@ -40,6 +79,25 @@ public class FamilyTreeViewer extends JFrame {
         }
     }
 
+    static List<Integer> findOccurrences(String text, String query) {
+        List<Integer> matches = new ArrayList<>();
+        if (query.isEmpty()) return matches;
+        int from = 0;
+        while (from <= text.length() - query.length()) {
+            int match = -1;
+            for (int i = from; i <= text.length() - query.length(); i++) {
+                if (text.regionMatches(true, i, query, 0, query.length())) {
+                    match = i;
+                    break;
+                }
+            }
+            if (match < 0) break;
+            matches.add(match);
+            from = match + query.length();
+        }
+        return matches;
+    }
+
     private static class ChartPanel extends JPanel {
         private static final int BOX_W = 160;
         private static final int LINE_H = 16;
@@ -48,9 +106,46 @@ public class FamilyTreeViewer extends JFrame {
         private static final int PAD = 20;
 
         private FamilyTreeModel model;
+        private String searchQuery = "";
+        private int activeMatchIndex;
+        private final List<Rectangle> searchMatches = new ArrayList<>();
+        private boolean searchNeedsRefresh;
+        private int searchGeneration;
+        private IntConsumer matchCountListener = count -> {
+        };
+
+        void setMatchCountListener(IntConsumer listener) {
+            matchCountListener = listener;
+        }
+
+        int getActiveMatchIndex() {
+            return activeMatchIndex;
+        }
+
+        void setSearchQuery(String query) {
+            if (searchQuery.equals(query)) return;
+            searchQuery = query;
+            activeMatchIndex = 0;
+            searchMatches.clear();
+            searchNeedsRefresh = true;
+            searchGeneration++;
+            repaint();
+        }
+
+        void moveMatch(int direction) {
+            if (searchMatches.isEmpty()) return;
+            activeMatchIndex = Math.floorMod(activeMatchIndex + direction, searchMatches.size());
+            repaint();
+            scrollToActiveMatch();
+            matchCountListener.accept(searchMatches.size());
+        }
 
         void setModel(FamilyTreeModel model) {
             this.model = model;
+            activeMatchIndex = 0;
+            searchMatches.clear();
+            searchNeedsRefresh = true;
+            searchGeneration++;
             int w = PAD;
             int h = PAD;
             Set<String> seen = new HashSet<>();
@@ -91,8 +186,10 @@ public class FamilyTreeViewer extends JFrame {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+            searchMatches.clear();
             if (model == null) {
                 g.drawString("No file loaded", PAD, PAD);
+                updateSearchStatusAfterPaint();
                 return;
             }
             Graphics2D g2 = (Graphics2D) g.create();
@@ -106,6 +203,28 @@ public class FamilyTreeViewer extends JFrame {
                 x += w + GAP_X;
             }
             g2.dispose();
+            updateSearchStatusAfterPaint();
+        }
+
+        private void updateSearchStatusAfterPaint() {
+            if (!searchNeedsRefresh) return;
+            searchNeedsRefresh = false;
+            if (activeMatchIndex >= searchMatches.size()) activeMatchIndex = 0;
+            int count = searchMatches.size();
+            int generation = searchGeneration;
+            Rectangle activeMatch = count == 0 ? null : new Rectangle(searchMatches.get(activeMatchIndex));
+            SwingUtilities.invokeLater(() -> {
+                if (generation != searchGeneration) return;
+                matchCountListener.accept(count);
+                if (activeMatch != null) scrollRectToVisible(activeMatch);
+            });
+        }
+
+        private void scrollToActiveMatch() {
+            if (activeMatchIndex < searchMatches.size()) {
+                Rectangle match = searchMatches.get(activeMatchIndex);
+                scrollRectToVisible(new Rectangle(match.x, match.y, match.width, match.height));
+            }
         }
 
         /** Draws p centered in [x, x+w); returns bottom-center attach point is implicit. */
@@ -142,12 +261,41 @@ public class FamilyTreeViewer extends JFrame {
         }
 
         private int text(Graphics2D g, FamilyTreeModel.Person p, int bx, int ty) {
-            g.setColor(Color.BLACK);
-            g.drawString(clip(g, p.name), bx + 6, ty);
+            drawSearchableText(g, clip(g, p.name), bx + 6, ty, Color.BLACK);
             ty += LINE_H;
-            g.setColor(Color.GRAY);
-            g.drawString(clip(g, p.life), bx + 6, ty);
+            drawSearchableText(g, clip(g, p.life), bx + 6, ty, Color.GRAY);
             return ty + LINE_H;
+        }
+
+        private void drawSearchableText(Graphics2D g, String text, int x, int baseline, Color color) {
+            if (searchQuery.isEmpty()) {
+                g.setColor(color);
+                g.drawString(text, x, baseline);
+                return;
+            }
+
+            List<Integer> occurrences = findOccurrences(text, searchQuery);
+            FontMetrics metrics = g.getFontMetrics();
+            int cursor = 0;
+            for (int start : occurrences) {
+                int end = start + searchQuery.length();
+                g.setColor(color);
+                g.drawString(text.substring(cursor, start),
+                        x + metrics.stringWidth(text.substring(0, cursor)), baseline);
+                int matchX = x + metrics.stringWidth(text.substring(0, start));
+                int matchWidth = metrics.stringWidth(text.substring(start, end));
+                Rectangle bounds = new Rectangle(matchX, baseline - metrics.getAscent(),
+                        matchWidth, metrics.getHeight());
+                boolean active = searchMatches.size() == activeMatchIndex;
+                g.setColor(active ? new Color(255, 170, 70) : new Color(255, 240, 120));
+                g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+                g.setColor(Color.BLACK);
+                g.drawString(text.substring(start, end), matchX, baseline);
+                searchMatches.add(bounds);
+                cursor = end;
+            }
+            g.setColor(color);
+            g.drawString(text.substring(cursor), x + metrics.stringWidth(text.substring(0, cursor)), baseline);
         }
 
         private String clip(Graphics2D g, String s) {
