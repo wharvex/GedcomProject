@@ -5,9 +5,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Builds a maximally interconnected family graph from a GEDCOM document and lays it out by generation. Spouses are
@@ -22,6 +25,7 @@ public class ConnectedTreeModel {
     public static final int GAP_Y = 60;
     public static final int PAD = 20;
     private static final int ORDERING_PASSES = 12;
+    private static final int ROUTE_LANE_GAP = 12;
 
     /** A family (FAM record) with its recorded parents and children. */
     public static class Family {
@@ -52,6 +56,68 @@ public class ConnectedTreeModel {
         }
     }
 
+    /** A family branch routed through a collision-free horizontal lane. */
+    public static class BranchRoute {
+        public final Family family;
+        public final int anchorX;
+        public final int anchorY;
+        public final int busY;
+        public final int routeX;
+        public final int exitY;
+        public final List<ChildConnection> children;
+
+        BranchRoute(Family family, int anchorX, int anchorY, int busY, int routeX, int exitY,
+                List<ChildConnection> children) {
+            this.family = family;
+            this.anchorX = anchorX;
+            this.anchorY = anchorY;
+            this.busY = busY;
+            this.routeX = routeX;
+            this.exitY = exitY;
+            this.children = children;
+        }
+    }
+
+    public static class ChildConnection {
+        public final Person person;
+        public final int x;
+
+        ChildConnection(Person person, int x) {
+            this.person = person;
+            this.x = x;
+        }
+    }
+
+    private static class BranchRoutePlan {
+        final Family family;
+        final int parentGeneration;
+        final int childGeneration;
+        final List<Person> children;
+        final int anchorX;
+        int routeX = -1;
+        int exitLane;
+        int lane;
+        int minX;
+        int maxX;
+        final Map<Person, Integer> childPorts = new HashMap<>();
+
+        BranchRoutePlan(Family family, int parentGeneration, int childGeneration, List<Person> children, int anchorX) {
+            this.family = family;
+            this.parentGeneration = parentGeneration;
+            this.childGeneration = childGeneration;
+            this.children = children;
+            this.anchorX = anchorX;
+            minX = anchorX;
+            maxX = anchorX;
+        }
+    }
+
+    record BranchSpan(int minX, int maxX) {
+        boolean overlaps(BranchSpan other) {
+            return minX <= other.maxX && other.minX <= maxX;
+        }
+    }
+
     /** People joined by marriage; drawn together in one row. */
     static class Block {
         final List<Person> members = new ArrayList<>();
@@ -68,6 +134,7 @@ public class ConnectedTreeModel {
 
     private final List<Person> people = new ArrayList<>();
     private final List<Family> families = new ArrayList<>();
+    private final List<BranchRoute> branchRoutes = new ArrayList<>();
     private int width = PAD * 2;
     private int height = PAD * 2;
 
@@ -119,6 +186,10 @@ public class ConnectedTreeModel {
         return families;
     }
 
+    public List<BranchRoute> getBranchRoutes() {
+        return branchRoutes;
+    }
+
     public int getWidth() {
         return width;
     }
@@ -157,15 +228,181 @@ public class ConnectedTreeModel {
             return;
         for (Block b : blocks) {
             int bx = (int) Math.round(b.x - minX) + PAD;
-            int by = PAD + b.generation * (BOX_H + GAP_Y);
             for (int i = 0; i < b.members.size(); i++) {
                 Person p = b.members.get(i);
                 p.x = bx + i * (BOX_W + SPOUSE_GAP);
-                p.y = by;
+                p.generation = b.generation;
             }
         }
-        width = (int) Math.round(maxX - minX) + PAD * 2;
-        height = PAD * 2 + (maxGen + 1) * BOX_H + maxGen * GAP_Y;
+        int layoutRight = (int) Math.round(maxX - minX) + PAD;
+        List<BranchRoutePlan> plans = buildBranchRoutePlans(maxGen, layoutRight);
+        int[] laneCounts = new int[maxGen];
+        int[] exitLaneCounts = new int[maxGen];
+        Map<Integer, List<BranchRoutePlan>> plansByGap = new HashMap<>();
+        Map<Integer, List<BranchRoutePlan>> exitsByGap = new HashMap<>();
+        for (BranchRoutePlan plan : plans) {
+            plansByGap.computeIfAbsent(plan.childGeneration - 1, key -> new ArrayList<>()).add(plan);
+            if (plan.routeX >= 0) {
+                exitsByGap.computeIfAbsent(plan.parentGeneration, key -> new ArrayList<>()).add(plan);
+            }
+        }
+        for (Map.Entry<Integer, List<BranchRoutePlan>> entry : plansByGap.entrySet()) {
+            List<BranchRoutePlan> gapPlans = entry.getValue();
+            List<Integer> lanes = assignBranchLanes(gapPlans.stream()
+                    .map(plan -> new BranchSpan(plan.minX, plan.maxX)).toList());
+            for (int i = 0; i < gapPlans.size(); i++) {
+                BranchRoutePlan plan = gapPlans.get(i);
+                plan.lane = lanes.get(i);
+                laneCounts[entry.getKey()] = Math.max(laneCounts[entry.getKey()], plan.lane + 1);
+            }
+        }
+        for (Map.Entry<Integer, List<BranchRoutePlan>> entry : exitsByGap.entrySet()) {
+            List<BranchRoutePlan> gapPlans = entry.getValue();
+            List<Integer> lanes = assignBranchLanes(gapPlans.stream()
+                    .map(plan -> new BranchSpan(Math.min(plan.anchorX, plan.routeX),
+                            Math.max(plan.anchorX, plan.routeX))).toList());
+            for (int i = 0; i < gapPlans.size(); i++) {
+                BranchRoutePlan plan = gapPlans.get(i);
+                plan.exitLane = lanes.get(i);
+                exitLaneCounts[entry.getKey()] = Math.max(exitLaneCounts[entry.getKey()], plan.exitLane + 1);
+            }
+        }
+        int[] generationY = new int[maxGen + 1];
+        generationY[0] = PAD;
+        for (int generation = 1; generation <= maxGen; generation++) {
+            generationY[generation] = generationY[generation - 1] + BOX_H + GAP_Y
+                    + (laneCounts[generation - 1] + exitLaneCounts[generation - 1]) * ROUTE_LANE_GAP;
+        }
+        for (Person p : people) {
+            p.y = generationY[p.generation];
+        }
+        buildBranchRoutes(plans, exitLaneCounts, generationY);
+        int routeRight = plans.stream().mapToInt(plan -> plan.routeX).max().orElse(layoutRight);
+        width = Math.max((int) Math.round(maxX - minX) + PAD * 2, routeRight + PAD);
+        height = generationY[maxGen] + BOX_H + PAD;
+    }
+
+    private List<BranchRoutePlan> buildBranchRoutePlans(int maxGen, int layoutRight) {
+        List<BranchRoutePlan> plans = new ArrayList<>();
+        Map<Person, List<BranchRoutePlan>> incoming = new HashMap<>();
+        int outerTrack = 0;
+        for (Family family : families) {
+            int parentGeneration = Math.max(family.husband == null ? 0 : family.husband.generation,
+                    family.wife == null ? 0 : family.wife.generation);
+            Map<Integer, List<Person>> childrenByGeneration = new TreeMap<>();
+            for (Person child : family.children) {
+                if (child.generation > parentGeneration && child.generation <= maxGen) {
+                    childrenByGeneration.computeIfAbsent(child.generation, key -> new ArrayList<>()).add(child);
+                }
+            }
+            for (Map.Entry<Integer, List<Person>> entry : childrenByGeneration.entrySet()) {
+                BranchRoutePlan plan = new BranchRoutePlan(family, parentGeneration, entry.getKey(), entry.getValue(),
+                        branchAnchorX(family));
+                if (plan.childGeneration > parentGeneration + 1) {
+                    plan.routeX = layoutRight + ++outerTrack * ROUTE_LANE_GAP;
+                }
+                plan.minX = plan.routeX >= 0 ? plan.routeX : plan.anchorX;
+                plan.maxX = plan.minX;
+                plans.add(plan);
+                for (Person child : plan.children) {
+                    incoming.computeIfAbsent(child, key -> new ArrayList<>()).add(plan);
+                }
+            }
+        }
+        for (Map.Entry<Person, List<BranchRoutePlan>> entry : incoming.entrySet()) {
+            List<BranchRoutePlan> childPlans = entry.getValue();
+            Set<Integer> used = new HashSet<>();
+            for (int i = 0; i < childPlans.size(); i++) {
+                BranchRoutePlan plan = childPlans.get(i);
+                int desired = (i + 1) * BOX_W / (childPlans.size() + 1);
+                int offset = childPortOffset(entry.getKey().x, desired, plans, used);
+                used.add(offset);
+                int portX = entry.getKey().x + offset;
+                plan.childPorts.put(entry.getKey(), portX);
+                plan.minX = Math.min(plan.minX, portX);
+                plan.maxX = Math.max(plan.maxX, portX);
+            }
+        }
+        return plans;
+    }
+
+    private void buildBranchRoutes(List<BranchRoutePlan> plans, int[] exitLaneCounts, int[] generationY) {
+        for (BranchRoutePlan plan : plans) {
+            int parentY = branchAnchorY(plan.family);
+            int busY = generationY[plan.childGeneration - 1] + BOX_H + GAP_Y / 2
+                    + exitLaneCounts[plan.childGeneration - 1] * ROUTE_LANE_GAP
+                    + plan.lane * ROUTE_LANE_GAP;
+            int exitY = plan.routeX < 0 ? 0 : generationY[plan.parentGeneration] + BOX_H + 4
+                    + plan.exitLane * ROUTE_LANE_GAP;
+            List<ChildConnection> children = plan.children.stream()
+                    .map(child -> new ChildConnection(child, plan.childPorts.get(child))).toList();
+            branchRoutes.add(new BranchRoute(plan.family, plan.anchorX, parentY, busY, plan.routeX, exitY, children));
+        }
+    }
+
+    private static int childPortOffset(int boxX, int desired, List<BranchRoutePlan> plans, Set<Integer> used) {
+        Set<Integer> sourcePorts = new HashSet<>();
+        for (BranchRoutePlan plan : plans) {
+            sourcePorts.add(plan.anchorX);
+        }
+        for (int distance = 0; distance < BOX_W; distance++) {
+            int right = desired + distance;
+            if (right > 0 && right < BOX_W && !used.contains(right) && !sourcePorts.contains(boxX + right)) {
+                return right;
+            }
+            int left = desired - distance;
+            if (left > 0 && left < BOX_W && !used.contains(left) && !sourcePorts.contains(boxX + left)) {
+                return left;
+            }
+        }
+        return desired;
+    }
+
+    static List<Integer> assignBranchLanes(List<BranchSpan> spans) {
+        List<List<BranchSpan>> lanes = new ArrayList<>();
+        List<Integer> assignments = new ArrayList<>();
+        for (BranchSpan span : spans) {
+            int lane = 0;
+            while (lane < lanes.size() && lanes.get(lane).stream().anyMatch(span::overlaps)) {
+                lane++;
+            }
+            if (lane == lanes.size()) {
+                lanes.add(new ArrayList<>());
+            }
+            lanes.get(lane).add(span);
+            assignments.add(lane);
+        }
+        return assignments;
+    }
+
+    private static int branchAnchorX(Family family) {
+        Person h = family.husband;
+        Person w = family.wife;
+        if (h != null && w != null) {
+            Person left = h.x <= w.x ? h : w;
+            Person right = left == h ? w : h;
+            if (left.y == right.y && right.x - left.x == BOX_W + SPOUSE_GAP) {
+                return left.x + BOX_W + SPOUSE_GAP / 2;
+            }
+            return (h.x + w.x) / 2 + BOX_W / 2;
+        }
+        Person only = h != null ? h : w;
+        return only.x + BOX_W / 2;
+    }
+
+    private static int branchAnchorY(Family family) {
+        Person h = family.husband;
+        Person w = family.wife;
+        if (h != null && w != null) {
+            Person left = h.x <= w.x ? h : w;
+            Person right = left == h ? w : h;
+            if (left.y == right.y && right.x - left.x == BOX_W + SPOUSE_GAP) {
+                return left.y + BOX_H / 2;
+            }
+            return Math.max(h.y, w.y) + BOX_H + 8;
+        }
+        Person only = h != null ? h : w;
+        return only.y + BOX_H;
     }
 
     private List<Block> buildBlocks() {
