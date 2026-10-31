@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.IntConsumer;
 
@@ -108,6 +110,12 @@ public class FamilyTreeViewer extends JFrame {
             from = match + query.length();
         }
         return matches;
+    }
+
+    static Color familyLineColor(int familyIndex) {
+        double hue = (familyIndex * 0.618033988749895) % 1.0;
+        if (hue < 0) hue++;
+        return Color.getHSBColor((float) hue, 0.72f, 0.58f);
     }
 
     private static class ChartPanel extends JPanel {
@@ -297,8 +305,10 @@ public class FamilyTreeViewer extends JFrame {
         private void drawConnected(Graphics2D g) {
             final int boxW = ConnectedTreeModel.BOX_W;
             final int boxH = ConnectedTreeModel.BOX_H;
-            g.setColor(Color.DARK_GRAY);
-            for (ConnectedTreeModel.Family f : connectedModel.getFamilies()) {
+            List<ConnectedTreeModel.Family> families = connectedModel.getFamilies();
+            for (int familyIndex = 0; familyIndex < families.size(); familyIndex++) {
+                ConnectedTreeModel.Family f = families.get(familyIndex);
+                g.setColor(familyLineColor(familyIndex));
                 ConnectedTreeModel.Person h = f.husband;
                 ConnectedTreeModel.Person w = f.wife;
                 int anchorX;
@@ -323,14 +333,23 @@ public class FamilyTreeViewer extends JFrame {
                     anchorY = only.y + boxH;
                 }
                 int parentBottom = Math.max(h == null ? 0 : h.y, w == null ? 0 : w.y) + boxH;
+                Map<Integer, List<ConnectedTreeModel.Person>> childrenByY = new LinkedHashMap<>();
                 for (ConnectedTreeModel.Person c : f.children) {
-                    int bus = Math.max(anchorY, parentBottom) + ConnectedTreeModel.GAP_Y / 2;
                     if (c.y <= parentBottom) continue;
-                    bus = Math.min(bus, c.y - 10);
-                    int cx = c.x + boxW / 2;
+                    childrenByY.computeIfAbsent(c.y, y -> new ArrayList<>()).add(c);
+                }
+                for (Map.Entry<Integer, List<ConnectedTreeModel.Person>> entry : childrenByY.entrySet()) {
+                    int childY = entry.getKey();
+                    int bus = Math.min(Math.max(anchorY, parentBottom) + ConnectedTreeModel.GAP_Y / 2, childY - 10);
+                    List<ConnectedTreeModel.Person> children = entry.getValue();
+                    int minChildX = children.stream().mapToInt(c -> c.x + boxW / 2).min().orElseThrow();
+                    int maxChildX = children.stream().mapToInt(c -> c.x + boxW / 2).max().orElseThrow();
                     g.drawLine(anchorX, anchorY, anchorX, bus);
-                    g.drawLine(anchorX, bus, cx, bus);
-                    g.drawLine(cx, bus, cx, c.y);
+                    g.drawLine(Math.min(anchorX, minChildX), bus, Math.max(anchorX, maxChildX), bus);
+                    for (ConnectedTreeModel.Person c : children) {
+                        int cx = c.x + boxW / 2;
+                        g.drawLine(cx, bus, cx, childY);
+                    }
                 }
             }
             for (ConnectedTreeModel.Person p : connectedModel.getPeople()) {

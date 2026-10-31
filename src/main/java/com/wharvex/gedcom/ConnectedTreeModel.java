@@ -21,6 +21,7 @@ public class ConnectedTreeModel {
     public static final int GAP_X = 30;
     public static final int GAP_Y = 60;
     public static final int PAD = 20;
+    private static final int ORDERING_PASSES = 12;
 
     /** A family (FAM record) with its recorded parents and children. */
     public static class Family {
@@ -140,7 +141,7 @@ public class ConnectedTreeModel {
             layers.get(b.generation).add(b);
         for (List<Block> layer : layers)
             place(layer, null);
-        for (int pass = 0; pass < 6; pass++) {
+        for (int pass = 0; pass < ORDERING_PASSES; pass++) {
             for (int g = 1; g <= maxGen; g++)
                 place(layers.get(g), true);
             for (int g = maxGen - 1; g >= 0; g--)
