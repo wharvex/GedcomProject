@@ -74,8 +74,8 @@ public class GedcomViewer extends JFrame {
         }
         final String m = mode;
         final String f = file;
-        if (!m.equals("raw") && !m.equals("tree") && !m.equals("roots")) {
-            System.err.println("Unknown view '" + m + "'; use --view raw, --view tree or --view roots");
+        if (!m.equals("raw") && !m.equals("tree") && !m.equals("connected") && !m.equals("roots")) {
+            System.err.println("Unknown view '" + m + "'; use --view raw, --view tree, --view connected or --view roots");
             System.exit(1);
         }
         if (m.equals("roots")) {
@@ -95,8 +95,8 @@ public class GedcomViewer extends JFrame {
             return;
         }
         SwingUtilities.invokeLater(() -> {
-            if (m.equals("tree")) {
-                FamilyTreeViewer v = new FamilyTreeViewer();
+            if (m.equals("tree") || m.equals("connected")) {
+                FamilyTreeViewer v = new FamilyTreeViewer(m.equals("connected"));
                 v.setVisible(true);
                 if (f != null) v.load(Path.of(f));
             } else {

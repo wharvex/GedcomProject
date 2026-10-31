@@ -92,7 +92,7 @@ public class FamilyTreeModel {
         return roots;
     }
 
-    private static String nameOf(GedcomNode indi) {
+    static String nameOf(GedcomNode indi) {
         for (GedcomNode c : indi.getChildren()) {
             if ("NAME".equals(c.getTag()) && c.getValue() != null) {
                 return c.getValue().replace("/", "").trim();
@@ -101,7 +101,7 @@ public class FamilyTreeModel {
         return "(unknown)";
     }
 
-    private static String lifeOf(GedcomNode indi) {
+    static String lifeOf(GedcomNode indi) {
         String b = year(indi, "BIRT");
         String d = year(indi, "DEAT");
         if (b.isEmpty() && d.isEmpty())
