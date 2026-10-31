@@ -15,9 +15,15 @@ public class FamilyTreeViewer extends JFrame {
     private final ChartPanel chart = new ChartPanel();
     private final JTextField searchField = new JTextField(20);
     private final JLabel searchStatus = new JLabel(" ");
+    private final boolean maximalConnections;
 
     public FamilyTreeViewer() {
-        super("GEDCOM Family Tree");
+        this(false);
+    }
+
+    public FamilyTreeViewer(boolean maximalConnections) {
+        super(maximalConnections ? "GEDCOM Maximal Connections" : "GEDCOM Family Tree");
+        this.maximalConnections = maximalConnections;
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         JButton open = new JButton("Open...");
         open.addActionListener(e -> chooseFile());
@@ -71,8 +77,8 @@ public class FamilyTreeViewer extends JFrame {
 
     public void load(Path path) {
         try {
-            chart.setModel(new FamilyTreeModel(new GedcomReader().read(path)));
-            setTitle("GEDCOM Family Tree - " + path);
+            chart.setModel(new FamilyTreeModel(new GedcomReader().read(path), maximalConnections));
+            setTitle((maximalConnections ? "GEDCOM Maximal Connections - " : "GEDCOM Family Tree - ") + path);
         } catch (IOException | RuntimeException ex) {
             JOptionPane.showMessageDialog(this, "Failed to parse file: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);

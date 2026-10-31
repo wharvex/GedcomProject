@@ -26,6 +26,10 @@ public class FamilyTreeModel {
     private final List<Person> roots = new ArrayList<>();
 
     public FamilyTreeModel(GedcomDocument doc) {
+        this(doc, false);
+    }
+
+    public FamilyTreeModel(GedcomDocument doc, boolean maximalConnections) {
         Map<String, Person> people = new LinkedHashMap<>();
         Map<String, GedcomNode> families = new LinkedHashMap<>();
         for (GedcomNode n : doc.getRootNodes()) {
@@ -57,7 +61,18 @@ public class FamilyTreeModel {
                 wife.spouses.add(husb);
             }
             Person parent = husb != null ? husb : wife;
-            if (parent != null) {
+            if (maximalConnections) {
+                for (Person k : kids) {
+                    if (husb != null) {
+                        husb.children.add(k);
+                        isChild.put(k.id, true);
+                    }
+                    if (wife != null && wife != husb) {
+                        wife.children.add(k);
+                        isChild.put(k.id, true);
+                    }
+                }
+            } else if (parent != null) {
                 for (Person k : kids) {
                     parent.children.add(k);
                     isChild.put(k.id, true);
@@ -67,6 +82,18 @@ public class FamilyTreeModel {
         for (Person p : people.values()) {
             if (isChild.containsKey(p.id))
                 continue;
+            if (maximalConnections) {
+                boolean representedBySpouse = false;
+                for (Person s : p.spouses) {
+                    if (isChild.containsKey(s.id) || s.id.compareTo(p.id) < 0) {
+                        representedBySpouse = true;
+                        break;
+                    }
+                }
+                if (!representedBySpouse)
+                    roots.add(p);
+                continue;
+            }
             // skip spouses who marry into the tree; they are shown alongside their partner
             boolean marriedIn = false;
             for (Person s : p.spouses) {

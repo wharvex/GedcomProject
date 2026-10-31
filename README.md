@@ -37,6 +37,15 @@ GedcomDocument document = reader.read(Path.of("fam-tree-example.ged"));
 ./gradlew -q run --args="--view tree fam-tree-example.ged"
 ```
 
+### Usage Example (Maximal Connections)
+
+```bash
+./gradlew -q run --args="--view maximal fam-tree-example.ged"
+```
+
+This view connects each child to both recorded parents, producing a more unified
+family tree than the paternal-line tree view.
+
 ## Roots Printer
 
 ### Usage Example
