@@ -16,8 +16,15 @@ public class FamilyTreeViewer extends JFrame {
     private final JTextField searchField = new JTextField(20);
     private final JLabel searchStatus = new JLabel(" ");
 
+    private final boolean connected;
+
     public FamilyTreeViewer() {
-        super("GEDCOM Family Tree");
+        this(false);
+    }
+
+    public FamilyTreeViewer(boolean connected) {
+        super(connected ? "GEDCOM Connected Family Tree" : "GEDCOM Family Tree");
+        this.connected = connected;
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         JButton open = new JButton("Open...");
         open.addActionListener(e -> chooseFile());
@@ -71,8 +78,13 @@ public class FamilyTreeViewer extends JFrame {
 
     public void load(Path path) {
         try {
-            chart.setModel(new FamilyTreeModel(new GedcomReader().read(path)));
-            setTitle("GEDCOM Family Tree - " + path);
+            GedcomDocument doc = new GedcomReader().read(path);
+            if (connected) {
+                chart.setConnectedModel(new ConnectedTreeModel(doc));
+            } else {
+                chart.setModel(new FamilyTreeModel(doc));
+            }
+            setTitle((connected ? "GEDCOM Connected Family Tree - " : "GEDCOM Family Tree - ") + path);
         } catch (IOException | RuntimeException ex) {
             JOptionPane.showMessageDialog(this, "Failed to parse file: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
@@ -106,6 +118,7 @@ public class FamilyTreeViewer extends JFrame {
         private static final int PAD = 20;
 
         private FamilyTreeModel model;
+        private ConnectedTreeModel connectedModel;
         private String searchQuery = "";
         private int activeMatchIndex;
         private final List<Rectangle> searchMatches = new ArrayList<>();
@@ -140,8 +153,21 @@ public class FamilyTreeViewer extends JFrame {
             matchCountListener.accept(searchMatches.size());
         }
 
+        void setConnectedModel(ConnectedTreeModel model) {
+            this.model = null;
+            this.connectedModel = model;
+            activeMatchIndex = 0;
+            searchMatches.clear();
+            searchNeedsRefresh = true;
+            searchGeneration++;
+            setPreferredSize(new Dimension(model.getWidth(), model.getHeight()));
+            revalidate();
+            repaint();
+        }
+
         void setModel(FamilyTreeModel model) {
             this.model = model;
+            this.connectedModel = null;
             activeMatchIndex = 0;
             searchMatches.clear();
             searchNeedsRefresh = true;
@@ -187,6 +213,14 @@ public class FamilyTreeViewer extends JFrame {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             searchMatches.clear();
+            if (connectedModel != null) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                drawConnected(g2);
+                g2.dispose();
+                updateSearchStatusAfterPaint();
+                return;
+            }
             if (model == null) {
                 g.drawString("No file loaded", PAD, PAD);
                 updateSearchStatusAfterPaint();
@@ -257,6 +291,55 @@ public class FamilyTreeViewer extends JFrame {
                 draw(g, c, cx, childY, cw, seen);
                 cx += cw + GAP_X;
                 totalW += cw;
+            }
+        }
+
+        private void drawConnected(Graphics2D g) {
+            final int boxW = ConnectedTreeModel.BOX_W;
+            final int boxH = ConnectedTreeModel.BOX_H;
+            g.setColor(Color.DARK_GRAY);
+            for (ConnectedTreeModel.Family f : connectedModel.getFamilies()) {
+                ConnectedTreeModel.Person h = f.husband;
+                ConnectedTreeModel.Person w = f.wife;
+                int anchorX;
+                int anchorY;
+                if (h != null && w != null) {
+                    ConnectedTreeModel.Person left = h.x <= w.x ? h : w;
+                    ConnectedTreeModel.Person right = left == h ? w : h;
+                    if (left.y == right.y && right.x - left.x == boxW + ConnectedTreeModel.SPOUSE_GAP) {
+                        anchorY = left.y + boxH / 2;
+                        g.drawLine(left.x + boxW, anchorY, right.x, anchorY);
+                        anchorX = left.x + boxW + ConnectedTreeModel.SPOUSE_GAP / 2;
+                    } else {
+                        anchorY = Math.max(h.y, w.y) + boxH + 8;
+                        g.drawLine(h.x + boxW / 2, h.y + boxH, h.x + boxW / 2, anchorY);
+                        g.drawLine(w.x + boxW / 2, w.y + boxH, w.x + boxW / 2, anchorY);
+                        g.drawLine(h.x + boxW / 2, anchorY, w.x + boxW / 2, anchorY);
+                        anchorX = (h.x + w.x) / 2 + boxW / 2;
+                    }
+                } else {
+                    ConnectedTreeModel.Person only = h != null ? h : w;
+                    anchorX = only.x + boxW / 2;
+                    anchorY = only.y + boxH;
+                }
+                int parentBottom = Math.max(h == null ? 0 : h.y, w == null ? 0 : w.y) + boxH;
+                for (ConnectedTreeModel.Person c : f.children) {
+                    int bus = Math.max(anchorY, parentBottom) + ConnectedTreeModel.GAP_Y / 2;
+                    if (c.y <= parentBottom) continue;
+                    bus = Math.min(bus, c.y - 10);
+                    int cx = c.x + boxW / 2;
+                    g.drawLine(anchorX, anchorY, anchorX, bus);
+                    g.drawLine(anchorX, bus, cx, bus);
+                    g.drawLine(cx, bus, cx, c.y);
+                }
+            }
+            for (ConnectedTreeModel.Person p : connectedModel.getPeople()) {
+                g.setColor(new Color(235, 243, 255));
+                g.fillRoundRect(p.x, p.y, boxW, boxH, 10, 10);
+                g.setColor(Color.DARK_GRAY);
+                g.drawRoundRect(p.x, p.y, boxW, boxH, 10, 10);
+                drawSearchableText(g, clip(g, p.name), p.x + 6, p.y + LINE_H, Color.BLACK);
+                drawSearchableText(g, clip(g, p.life), p.x + 6, p.y + 2 * LINE_H, Color.GRAY);
             }
         }
 

@@ -37,6 +37,15 @@ GedcomDocument document = reader.read(Path.of("fam-tree-example.ged"));
 ./gradlew -q run --args="--view tree fam-tree-example.ged"
 ```
 
+### Usage Example (Maximally Connected Tree)
+
+Shows one unified tree: children connect to both recorded parents, spouses sit side by side in marriage blocks,
+and each spouse's own ancestors are drawn above that spouse.
+
+```bash
+./gradlew -q run --args="--view connected fam-tree-example.ged"
+```
+
 ## Roots Printer
 
 ### Usage Example
