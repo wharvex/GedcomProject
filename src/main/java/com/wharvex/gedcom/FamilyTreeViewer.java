@@ -6,12 +6,17 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.IntConsumer;
 
 /** Graphical viewer that draws the GEDCOM file as a descendant family tree chart. */
 public class FamilyTreeViewer extends JFrame {
+    private record BranchStem(ConnectedTreeModel.Family family, int x, int y) {
+    }
+
     private final ChartPanel chart = new ChartPanel();
     private final JTextField searchField = new JTextField(20);
     private final JLabel searchStatus = new JLabel(" ");
@@ -108,6 +113,12 @@ public class FamilyTreeViewer extends JFrame {
             from = match + query.length();
         }
         return matches;
+    }
+
+    static Color familyLineColor(int familyIndex) {
+        double hue = (familyIndex * 0.618033988749895) % 1.0;
+        if (hue < 0) hue++;
+        return Color.getHSBColor((float) hue, 0.72f, 0.58f);
     }
 
     private static class ChartPanel extends JPanel {
@@ -297,40 +308,53 @@ public class FamilyTreeViewer extends JFrame {
         private void drawConnected(Graphics2D g) {
             final int boxW = ConnectedTreeModel.BOX_W;
             final int boxH = ConnectedTreeModel.BOX_H;
-            g.setColor(Color.DARK_GRAY);
-            for (ConnectedTreeModel.Family f : connectedModel.getFamilies()) {
+            List<ConnectedTreeModel.Family> families = connectedModel.getFamilies();
+            for (int familyIndex = 0; familyIndex < families.size(); familyIndex++) {
+                ConnectedTreeModel.Family f = families.get(familyIndex);
+                g.setColor(familyLineColor(familyIndex));
                 ConnectedTreeModel.Person h = f.husband;
                 ConnectedTreeModel.Person w = f.wife;
-                int anchorX;
-                int anchorY;
                 if (h != null && w != null) {
                     ConnectedTreeModel.Person left = h.x <= w.x ? h : w;
                     ConnectedTreeModel.Person right = left == h ? w : h;
                     if (left.y == right.y && right.x - left.x == boxW + ConnectedTreeModel.SPOUSE_GAP) {
-                        anchorY = left.y + boxH / 2;
+                        int anchorY = left.y + boxH / 2;
                         g.drawLine(left.x + boxW, anchorY, right.x, anchorY);
-                        anchorX = left.x + boxW + ConnectedTreeModel.SPOUSE_GAP / 2;
                     } else {
-                        anchorY = Math.max(h.y, w.y) + boxH + 8;
+                        int anchorY = Math.max(h.y, w.y) + boxH + 8;
                         g.drawLine(h.x + boxW / 2, h.y + boxH, h.x + boxW / 2, anchorY);
                         g.drawLine(w.x + boxW / 2, w.y + boxH, w.x + boxW / 2, anchorY);
                         g.drawLine(h.x + boxW / 2, anchorY, w.x + boxW / 2, anchorY);
-                        anchorX = (h.x + w.x) / 2 + boxW / 2;
                     }
-                } else {
-                    ConnectedTreeModel.Person only = h != null ? h : w;
-                    anchorX = only.x + boxW / 2;
-                    anchorY = only.y + boxH;
                 }
-                int parentBottom = Math.max(h == null ? 0 : h.y, w == null ? 0 : w.y) + boxH;
-                for (ConnectedTreeModel.Person c : f.children) {
-                    int bus = Math.max(anchorY, parentBottom) + ConnectedTreeModel.GAP_Y / 2;
-                    if (c.y <= parentBottom) continue;
-                    bus = Math.min(bus, c.y - 10);
-                    int cx = c.x + boxW / 2;
-                    g.drawLine(anchorX, anchorY, anchorX, bus);
-                    g.drawLine(anchorX, bus, cx, bus);
-                    g.drawLine(cx, bus, cx, c.y);
+            }
+            Map<BranchStem, Integer> stemEnds = new LinkedHashMap<>();
+            for (ConnectedTreeModel.BranchRoute route : connectedModel.getBranchRoutes()) {
+                BranchStem stem = new BranchStem(route.family, route.anchorX, route.anchorY);
+                int endY = route.routeX >= 0 ? route.exitY : route.busY;
+                stemEnds.merge(stem, endY, Math::max);
+            }
+            for (Map.Entry<BranchStem, Integer> entry : stemEnds.entrySet()) {
+                BranchStem stem = entry.getKey();
+                g.setColor(familyLineColor(families.indexOf(stem.family())));
+                g.drawLine(stem.x(), stem.y(), stem.x(), entry.getValue());
+            }
+            for (ConnectedTreeModel.BranchRoute route : connectedModel.getBranchRoutes()) {
+                g.setColor(familyLineColor(families.indexOf(route.family)));
+                int busStartX = route.routeX >= 0 ? route.routeX : route.anchorX;
+                int minX = busStartX;
+                int maxX = busStartX;
+                for (ConnectedTreeModel.ChildConnection child : route.children) {
+                    minX = Math.min(minX, child.x);
+                    maxX = Math.max(maxX, child.x);
+                }
+                if (route.routeX >= 0) {
+                    g.drawLine(route.anchorX, route.exitY, route.routeX, route.exitY);
+                    g.drawLine(route.routeX, route.exitY, route.routeX, route.busY);
+                }
+                g.drawLine(minX, route.busY, maxX, route.busY);
+                for (ConnectedTreeModel.ChildConnection child : route.children) {
+                    g.drawLine(child.x, route.busY, child.x, child.person.y);
                 }
             }
             for (ConnectedTreeModel.Person p : connectedModel.getPeople()) {
